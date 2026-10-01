@@ -9,6 +9,7 @@
 //
 //  Separacion Transient / Sustain en el DOMINIO DE GANANCIA (sin crossovers):
 //    - Detector diferencial (envolvente rapida vs lenta) -> t (0..1)
+//    - Cadena en serie: 1) compresor de transientes, 2) compresor de cuerpo
 //    - Compresor feed-forward en dB con soft-knee
 //    - Reduccion aplicada = GR * BodyAmount * (1 - Protection * t)
 //  Latencia 0 y fase intacta. Con oversampling la latencia la aporta el
@@ -232,26 +233,26 @@ public:
             // 1) transiente
             const float t = detector.process (peak, loDb, hiDb);
 
-            // 2) nivel para el compresor de cuerpo (el transiente "carga" menos)
-            const float rawDb = linToDb (peak);
-            const float lvlDb = rawDb - p.protection * t * 6.0f;
-
-            // 3) gain computer + ballistics
-            const float target = computeGainReductionDb (lvlDb, p.thresholdDb, ratio, p.kneeDb);
-            grState = target < grState ? attCoef * grState + (1.0f - attCoef) * target
-                                       : relCoef * grState + (1.0f - relCoef) * target;
-
-            // 4) separacion en dominio de ganancia
-            const float bodyGr    = grState * p.bodyAmount;
-            const float appliedGr = bodyGr * (1.0f - p.protection * t);
-            const float boostDb   = boostAmt * t * 2.0f;
-
-            // 4b) compresor dedicado a transientes: solo actua donde t > 0,
-            //     con threshold / ratio / attack / release propios
+            // 2) COMPRESOR DE TRANSIENTES (primero, como en una cadena en serie):
+            //    solo actua donde t > 0, con threshold / ratio / attack / release propios
+            const float rawDb   = linToDb (peak);
             const float tTarget = computeGainReductionDb (rawDb, p.transThresholdDb, tRatio, p.kneeDb);
             grTrans = tTarget < grTrans ? tAtt * grTrans + (1.0f - tAtt) * tTarget
                                         : tRel * grTrans + (1.0f - tRel) * tTarget;
             const float transGr = grTrans * p.transAmount * t;
+
+            // 3) COMPRESOR DE CUERPO (despues): su detector ve la senal YA reducida por el
+            //    compresor de transientes (igual que dos compresores en serie), y ademas
+            //    el transiente "carga" menos (duck de hasta 6 dB segun Protection)
+            const float lvlDb  = rawDb + transGr - p.protection * t * 6.0f;
+            const float target = computeGainReductionDb (lvlDb, p.thresholdDb, ratio, p.kneeDb);
+            grState = target < grState ? attCoef * grState + (1.0f - attCoef) * target
+                                       : relCoef * grState + (1.0f - relCoef) * target;
+
+            // 4) proteccion del transiente frente al compresor de cuerpo + realce
+            const float bodyGr    = grState * p.bodyAmount;
+            const float appliedGr = bodyGr * (1.0f - p.protection * t);
+            const float boostDb   = boostAmt * t * 2.0f;
 
             const float g = dbToGain (appliedGr + transGr + boostDb) * mkG;
 
