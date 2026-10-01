@@ -26,12 +26,15 @@ class MeterPanel : public juce::Component, private juce::Timer
 public:
     explicit MeterPanel (TransientLockAudioProcessor& p);
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;   // reinicia los picos
 
 private:
     void timerCallback() override;
 
     TransientLockAudioProcessor& proc;
     float body = 0.0f, applied = 0.0f, transGr = 0.0f, trans = 0.0f;
+    float hold[3] = { 0.0f, 0.0f, 0.0f };
+    int holdFrames[3] = { 0, 0, 0 };
 };
 
 //==============================================================================
