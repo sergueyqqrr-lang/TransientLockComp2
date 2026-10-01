@@ -57,6 +57,25 @@ valida el VST3 con **pluginval** (strictness 5) y sube los artefactos. Si haces 
 
 La ventana es redimensionable (se recuerda el tamano en el estado del plugin).
 
+## Interfaz: la cadena de senal, de arriba a abajo
+
+La ventana esta organizada en el **mismo orden en que trabaja la senal**:
+
+| Etapa | Que contiene |
+|---|---|
+| **INPUT / DETECTOR** | Input, SC HPF, Sensitivity y un diagrama de flujo (INPUT -> DETECT -> PEAK -> BODY -> OUTPUT) que se apaga/enciende segun el estado de cada compresor |
+| **1  PEAK COMPRESSOR** (verde) | Amount, Threshold, Ratio, Attack, Release. Actua primero y solo sobre transientes |
+| **2  BODY COMPRESSOR** (azul) | Threshold, Ratio, Attack, Release, Knee, Body Amount y **Transient Protection** (naranja, destacado). Su detector ve la senal ya procesada por la etapa 1 |
+| **OUTPUT** | Makeup, Mix, Output y Oversampling |
+
+### Botones ON / OFF
+Cada compresor tiene su boton de encendido (pastilla con LED) en la esquina de su panel:
+- **PEAK ON/OFF:** activa o desactiva el compresor de picos. Por defecto esta **apagado**; al encenderlo ya suena (Amount 50 %).
+- **BODY ON/OFF:** activa o desactiva el compresor de cuerpo (incluye Transient Protection y su realce).
+- Con ambos apagados la senal solo pasa por Input / Makeup / Mix / Output.
+- Los cambios usan una rampa de 20 ms (sin clicks) y los controles de la etapa apagada se atenuan visualmente.
+- Ambos son parametros automatizables desde el DAW.
+
 ## Como funciona
 
 La separacion transient/sustain se hace en el **dominio de ganancia**:
@@ -68,11 +87,11 @@ La separacion transient/sustain se hace en el **dominio de ganancia**:
 
 Latencia: 0 muestras con Oversampling Off; con 2x/4x se reporta la del oversampler.
 
-## Medidores (escala en dB)
-Los tres primeros son de **reduccion de ganancia** con escala de 0 a -24 dB (a la izquierda), lectura numerica
-arriba y una marca blanca de **pico retenido** (1.5 s). Haz clic sobre el medidor para reiniciar los picos.
+## Medidores (escala en dB, mismo orden que la cadena)
+Cuatro medidores: **ACT -> PEAK -> BODY -> TOTAL**. Los tres ultimos son de reduccion de ganancia (0 a -24 dB)
+con lectura numerica y marca de pico retenido (1.5 s). Clic sobre el medidor = reiniciar picos.
 
-- **BODY:** reduccion del cuerpo sin proteccion.
+- **ACT:** actividad del detector de transientes (%).
+- **PEAK:** reduccion del compresor de picos.
+- **BODY:** reduccion del compresor de cuerpo (sin proteccion).
 - **TOTAL:** reduccion total aplicada.
-- **T-GR:** reduccion del compresor de transientes.
-- **ACT:** actividad del detector (en %).
