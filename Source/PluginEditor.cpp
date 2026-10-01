@@ -81,6 +81,12 @@ MeterPanel::MeterPanel (TransientLockAudioProcessor& p) : proc (p)
     startTimerHz (30);
 }
 
+void MeterPanel::mouseDown (const juce::MouseEvent&)
+{
+    // clic en el medidor = reiniciar los picos retenidos
+    for (int i = 0; i < 3; ++i) { hold[i] = 0.0f; holdFrames[i] = 0; }
+}
+
 void MeterPanel::timerCallback()
 {
     auto follow = [] (float& disp, float target, float fall)
@@ -91,6 +97,15 @@ void MeterPanel::timerCallback()
     follow (applied, proc.meterApplied.load(),   0.8f);
     follow (transGr, proc.meterTransGr.load(),   0.8f);
     follow (trans,   proc.meterTransient.load(), 0.06f);
+
+    // Peak hold: se mantiene 1.5 s y luego cae suavemente
+    const float vals[3] = { body, applied, transGr };
+    for (int i = 0; i < 3; ++i)
+    {
+        if (vals[i] >= hold[i])        { hold[i] = vals[i]; holdFrames[i] = 45; }
+        else if (holdFrames[i] > 0)    { --holdFrames[i]; }
+        else                           { hold[i] = std::max (vals[i], hold[i] - 0.4f); }
+    }
     repaint();
 }
 
@@ -101,33 +116,87 @@ void MeterPanel::paint (juce::Graphics& g)
     g.setColour (TLLookAndFeel::panel);
     g.fillRoundedRectangle (b, 8.0f * s);
 
-    auto inner = b.reduced (10.0f * s);
-    auto labelsArea = inner.removeFromBottom (18.0f * s);
+    auto inner       = b.reduced (8.0f * s);
+    auto labelsArea  = inner.removeFromBottom (18.0f * s);
+    auto readoutArea = inner.removeFromTop (18.0f * s);
+    auto gutter      = inner.removeFromLeft (24.0f * s);
+    readoutArea.removeFromLeft (24.0f * s);
+
+    constexpr float maxDb = 24.0f;
     const float colW = inner.getWidth() / 4.0f;
     const char* names[]  = { "BODY", "TOTAL", "T-GR", "ACT" };
     const float values[] = { body, applied, transGr, trans };
+    const juce::Colour colours[] = { TLLookAndFeel::accent, TLLookAndFeel::hot,
+                                     juce::Colour (0xff7CFFB2), juce::Colour (0xff9AE6B4) };
+    const float ticks[] = { 0.0f, 3.0f, 6.0f, 12.0f, 18.0f, 24.0f };
+    const float smallFont = juce::jmax (8.0f, 10.0f * s);
+
+    // Escala en dB (columna izquierda)
+    g.setFont (juce::jmax (7.5f, 9.0f * s));
+    for (float db : ticks)
+    {
+        const float y = inner.getY() + inner.getHeight() * (db / maxDb);
+        g.setColour (juce::Colours::white.withAlpha (0.5f));
+        const juce::String txt = db == 0.0f ? juce::String ("0") : "-" + juce::String ((int) db);
+        g.drawText (txt, juce::Rectangle<float> (gutter.getX(), y - 6.0f * s,
+                                                 gutter.getWidth() - 3.0f * s, 12.0f * s).toNearestInt(),
+                    juce::Justification::centredRight);
+    }
+    g.setColour (juce::Colours::white.withAlpha (0.45f));
+    g.setFont (smallFont);
+    g.drawText ("dB", juce::Rectangle<float> (gutter.getX(), readoutArea.getY(),
+                                              gutter.getWidth() - 3.0f * s, readoutArea.getHeight()).toNearestInt(),
+                juce::Justification::centredRight);
 
     for (int i = 0; i < 4; ++i)
     {
         auto col = juce::Rectangle<float> (inner.getX() + (float) i * colW, inner.getY(),
-                                           colW, inner.getHeight()).reduced (6.0f * s, 0.0f);
+                                           colW, inner.getHeight()).reduced (5.0f * s, 0.0f);
         g.setColour (juce::Colour (0xff0e1015));
         g.fillRoundedRectangle (col, 4.0f * s);
 
-        if (i < 3)
+        if (i < 3)   // medidores de reduccion de ganancia: crecen desde arriba (0 dB) hacia abajo
         {
-            const float frac = juce::jlimit (0.0f, 1.0f, values[i] / 24.0f);
-            g.setColour (i == 0 ? TLLookAndFeel::accent
-                                : (i == 1 ? TLLookAndFeel::hot : juce::Colour (0xff7CFFB2)));
+            const float frac = juce::jlimit (0.0f, 1.0f, values[i] / maxDb);
+            g.setColour (colours[i]);
             g.fillRoundedRectangle (col.withHeight (juce::jmax (0.0f, col.getHeight() * frac)), 4.0f * s);
         }
-        else
+        else         // actividad de transiente: crece desde abajo
         {
             const float frac = juce::jlimit (0.0f, 1.0f, values[i]);
-            g.setColour (juce::Colour (0xff9AE6B4));
+            g.setColour (colours[i]);
             g.fillRoundedRectangle (col.withTrimmedTop (col.getHeight() * (1.0f - frac)), 4.0f * s);
         }
 
+        if (i < 3)
+        {
+            // Lineas de la escala en dB sobre la barra
+            g.setColour (juce::Colours::white.withAlpha (0.14f));
+            for (float db : ticks)
+            {
+                const float y = col.getY() + col.getHeight() * (db / maxDb);
+                g.fillRect (juce::Rectangle<float> (col.getX(), y - 0.5f, col.getWidth(), 1.0f));
+            }
+
+            // Marca de pico retenido
+            const float hy = col.getY() + col.getHeight() * juce::jlimit (0.0f, 1.0f, hold[i] / maxDb);
+            g.setColour (juce::Colours::white.withAlpha (0.9f));
+            g.fillRect (juce::Rectangle<float> (col.getX(), hy - 1.0f * s, col.getWidth(), 2.0f * s));
+        }
+
+        // Lectura numerica (arriba)
+        juce::String readout;
+        if (i < 3) readout = hold[i] < 0.05f ? juce::String ("0.0") : "-" + juce::String (hold[i], 1);
+        else       readout = juce::String (juce::roundToInt (trans * 100.0f)) + "%";
+
+        g.setColour (colours[i]);
+        g.setFont (smallFont);
+        g.drawText (readout,
+                    juce::Rectangle<float> (inner.getX() + (float) i * colW, readoutArea.getY(),
+                                            colW, readoutArea.getHeight()).toNearestInt(),
+                    juce::Justification::centred);
+
+        // Nombre (abajo)
         g.setColour (juce::Colours::white.withAlpha (0.6f));
         g.setFont (juce::jmax (8.0f, 11.0f * s));
         g.drawText (names[i],
