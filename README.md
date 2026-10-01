@@ -63,11 +63,16 @@ La separacion transient/sustain se hace en el **dominio de ganancia**:
 
 1. Detector diferencial: envolvente rapida (0.5/10 ms) vs lenta (30/200 ms) -> `t` en 0..1 (smoothstep).
 2. Compresor feed-forward en dB con soft-knee (detector stereo-linked, con HPF opcional).
-3. Reduccion aplicada = `GR_cuerpo x BodyCompression x (1 - Protection x t)  +  GR_transiente x TransientAmount x t`.
+3. **Orden de procesado (en serie): primero picos, luego cuerpo.** El compresor de transientes actua primero; el detector del compresor de cuerpo ve la senal ya reducida. Reduccion total = `GR_transiente x TransientAmount x t  +  GR_cuerpo x BodyCompression x (1 - Protection x t)`.
 4. El detector del compresor baja hasta 6 dB durante el transiente (evita tirones posteriores).
 
 Latencia: 0 muestras con Oversampling Off; con 2x/4x se reporta la del oversampler.
 
-## Medidores
-**BODY** (reduccion del cuerpo sin proteccion), **TOTAL** (reduccion total aplicada),
-**T-GR** (reduccion del compresor de transientes) y **ACT** (actividad del detector).
+## Medidores (escala en dB)
+Los tres primeros son de **reduccion de ganancia** con escala de 0 a -24 dB (a la izquierda), lectura numerica
+arriba y una marca blanca de **pico retenido** (1.5 s). Haz clic sobre el medidor para reiniciar los picos.
+
+- **BODY:** reduccion del cuerpo sin proteccion.
+- **TOTAL:** reduccion total aplicada.
+- **T-GR:** reduccion del compresor de transientes.
+- **ACT:** actividad del detector (en %).
